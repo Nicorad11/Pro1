@@ -1,26 +1,23 @@
-let x;
-let justHitRightWall;
-let xspeed = 3;
+let w = window.innerWidth;
+let h = window.innerHeight;
 
 function setup() {
-  createCanvas(400, 400);
-  x = width / 2;
+  createCanvas(w, h);
 }
 
 function draw() {
   background(220);
-  if (x > width - 22 || x < 0 + 25) {
-    xspeed *= -1;
-  }
+  ellipse(w / 2, h / 2, 100, 100);
 
-  //Move
-  x += xspeed;
-  circle(x, height / 8, 30, 50);
-
-  if (mousePressed) {
-    pointX = mouseX;
-    pointY = mouseY;
-    print(pointX, pointY);
-    line(posX, pointX, pointY);
+  if (
+    /*mouseY  > ( 720,330) && mouseY < ( 720,430) || */ mouseX < 820 &&
+    mouseX > 720
+  ) {
+    fill(random(0, 255), random(0, 255), random(0, 255));
   }
+  let leftWall = 720;
+  let rightWall = 820;
+  stroke(150);
+  line(leftWall, 0, leftWall, height);
+  line(rightWall, 0, rightWall, height);
 }
