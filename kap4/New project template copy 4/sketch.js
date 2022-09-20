@@ -1,7 +1,7 @@
 let x;
 let justHitRightWall;
 let xspeed = 3;
-
+let s = "hi Github";
 function setup() {
   createCanvas(400, 400);
   x = width / 2;
