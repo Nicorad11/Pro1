@@ -9,10 +9,12 @@ let d = 80;
 
 function preload() {
   img = loadImage("Mouse.png");
+  img2 = loadImage("AngryCat.png");
 }
 
 function setup() {
   createCanvas(w, h);
+  //Win-inner = top & bottom//
   xPos = random(0, width);
   yPos = random(0, height);
   speed = 5;
@@ -26,7 +28,7 @@ function draw() {
   image(img, xPos, yPos, d, d);
   xPos += a;
   yPos += b;
-  borderCheck();
+  borderCheck(); //Function bordercheck= når img rammer border ændres speed,x- & yPos//
 }
 
 function borderCheck() {
@@ -69,4 +71,12 @@ function keyPressed() {
     a = speed;
     2;
   }
+}
+
+function cat() {
+  background(220);
+  image(img2, xPos, yPos, d, d);
+  xPos += a;
+  yPos += b;
+  borderCheck();
 }
