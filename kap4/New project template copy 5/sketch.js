@@ -70,3 +70,16 @@ function keyPressed() {
     2;
   }
 }
+
+function preload() {
+  img = loadImage("AngryCat.png");
+}
+
+function draw() {
+  background(200);
+
+  image(img, xPos, yPos, d, d);
+  xPos += a;
+  yPos += b;
+  borderCheck();
+}
