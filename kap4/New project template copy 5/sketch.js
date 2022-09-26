@@ -1,4 +1,4 @@
-let w = window.innerWidth;
+let w = window.innerWidth; //W,H = størrelsen på vinduet//
 let h = window.innerHeight;
 let xPos;
 let yPos;
