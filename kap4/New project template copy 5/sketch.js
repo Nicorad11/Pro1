@@ -52,12 +52,12 @@ function borderCheck() {
 
 function keyPressed() {
   if (keyCode === DOWN_ARROW) {
-    b = speed;
+    b = speed; //if keypressed = Speed bliver positiv//
     2;
     a = 0;
   }
   if (keyCode === UP_ARROW) {
-    b = -speed;
+    b = -speed; //if keypressed = Speed bliver negativ//
     2;
     a = 0;
   }
@@ -79,4 +79,11 @@ function cat() {
   xPos += a;
   yPos += b;
   borderCheck();
+}
+
+function mus() {
+  //function virker ikke//
+  if (keyCode === LEFT_ARROW) {
+    img2 = scave(-1, 1);
+  }
 }
