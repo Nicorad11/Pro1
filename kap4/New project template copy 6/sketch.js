@@ -3,5 +3,10 @@ function setup() {
 }
 
 function draw() {
-  background(220);
+  background(237, 34, 93);
+  fill(200);
+  for (let i = 0; i < 400; i++) {
+    let r = random(-300, 300);
+    line(200, i, 200 + r, i);
+  }
 }

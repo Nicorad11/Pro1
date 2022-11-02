@@ -84,6 +84,6 @@ function cat() {
 function mus() {
   //function virker ikke//
   if (keyCode === LEFT_ARROW) {
-    img2 = scave(-1, 1);
+    img2 = scale(-1, 1);
   }
 }
