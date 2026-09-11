@@ -25,6 +25,7 @@ const defaults = {
   braendstof: "benzin",
   benzinPris: 13.79,
   benzinPrisOpdateret: null,
+  benzinPrisEgen: false, // true når brugeren selv har rettet prisen
   elForbrug: 17,
   ladetab: 10,
   benzinForbrug: 18,
@@ -36,6 +37,9 @@ const state = Object.assign({}, defaults, load());
 
 /** Spotpriser for i dag: [{hour, dkkExMoms}] — tom indtil de er hentet. */
 let spot = { timer: [], kilde: null, fejl: null, henter: false };
+
+/** Brændstofpriserne fra datafilen: {benzin95, diesel, kilde, hentet}. */
+let braendstofKilde = null;
 
 function load() {
   try {
@@ -77,6 +81,35 @@ const felter = {
 function datoDele(d = new Date()) {
   const p = (n) => String(n).padStart(2, "0");
   return { aar: d.getFullYear(), md: p(d.getMonth() + 1), dag: p(d.getDate()) };
+}
+
+/*
+ * Priserne fra vores egen datafil, som en GitHub Action opdaterer et par
+ * gange i døgnet. Den ligger på samme domæne som appen, så den virker
+ * også dér, hvor browseren spærrer for kald til fremmede domæner — og
+ * det er den eneste vej til pumpepriserne.
+ */
+async function hentDatafil() {
+  const svar = await fetch("data/priser.json", { cache: "no-cache" });
+  if (!svar.ok) throw new Error("datafil " + svar.status);
+  return svar.json();
+}
+
+/** Brændstofpriserne fra datafilen, hvis der er nogen. */
+function brugBraendstof(data) {
+  const b = data && data.braendstof;
+  if (!b) return;
+
+  braendstofKilde = b;
+  const pris = state.braendstof === "diesel" ? b.diesel : b.benzin95;
+
+  // Brugerens egen pris vinder altid over den hentede.
+  if (typeof pris === "number" && !state.benzinPrisEgen) {
+    state.benzinPris = pris;
+    state.benzinPrisOpdateret = Date.parse(b.hentet) || Date.now();
+    felter.benzinPris.value = pris;
+    save();
+  }
 }
 
 async function hentElprisenLigeNu(region) {
@@ -124,18 +157,43 @@ async function hentSpotpriser() {
   opdater();
 
   const region = state.region;
-  try {
-    spot.timer = await hentElprisenLigeNu(region);
-    spot.kilde = "elprisenligenu.dk";
-  } catch (err1) {
-    try {
-      spot.timer = await hentEnergiDataService(region);
+  const iDag = new Date().toISOString().slice(0, 10);
+  const forsoeg = [
+    // Egen datafil først: den har også brændstofpriserne, og den virker
+    // uanset om browseren tillader kald til fremmede domæner.
+    async () => {
+      const data = await hentDatafil();
+      brugBraendstof(data);
+      const timer = data.el && data.el[region];
+      if (!timer || !timer.length) throw new Error("ingen elpriser i datafilen");
+      if (data.el.dato !== iDag) throw new Error("datafilen er fra " + data.el.dato);
       spot.kilde = "Energi Data Service";
-    } catch (err2) {
-      spot.timer = [];
-      spot.kilde = null;
-      spot.fejl = "Kunne ikke hente spotpriser lige nu (" + err2.message + ").";
+      return timer.map((t) => ({ hour: t.time, dkkExMoms: t.pris }));
+    },
+    async () => {
+      spot.kilde = "elprisenligenu.dk";
+      return hentElprisenLigeNu(region);
+    },
+    async () => {
+      spot.kilde = "Energi Data Service";
+      return hentEnergiDataService(region);
+    },
+  ];
+
+  const grunde = [];
+  spot.timer = [];
+  for (const forsoegt of forsoeg) {
+    try {
+      spot.timer = await forsoegt();
+      break;
+    } catch (err) {
+      grunde.push(err.message);
     }
+  }
+
+  if (spot.timer.length === 0) {
+    spot.kilde = null;
+    spot.fejl = "Kunne ikke hente spotpriser lige nu (" + grunde.join("; ") + ").";
   }
 
   // Uden spotpriser kan appen ikke regne på el. Har brugeren ikke selv valgt,
@@ -408,7 +466,10 @@ function bindFelter() {
       } else if (node.type === "number") {
         const v = parseFloat(node.value);
         state[navn] = isNaN(v) ? 0 : v;
-        if (navn === "benzinPris") state.benzinPrisOpdateret = Date.now();
+        if (navn === "benzinPris") {
+          state.benzinPrisOpdateret = Date.now();
+          state.benzinPrisEgen = true;
+        }
       } else {
         state[navn] = node.value;
       }
@@ -454,7 +515,7 @@ bindSegment("ladeSted", "ladeSted", () => {
   state.harValgtLadeSted = true; // så skifter appen ikke om under fødderne på dig
   visLadePanel();
 });
-bindSegment("braendstof", "braendstof");
+bindSegment("braendstof", "braendstof", () => brugBraendstof({ braendstof: braendstofKilde }));
 visLadePanel();
 el("opdaterPriser").addEventListener("click", hentSpotpriser);
 

@@ -35,65 +35,75 @@ async function hent(url, { json = false, timeout = 20000 } = {}) {
 
 /* ------------------------------------------------------------------- el */
 
-function dato(forskydDage = 0) {
-  const d = new Date(Date.now() + forskydDage * 86400000);
-  return d.toISOString().slice(0, 10);
+function dato(forskydDage = 0, fra = null) {
+  const start = fra ? Date.parse(fra + "T12:00:00Z") : Date.now();
+  return new Date(start + forskydDage * 86400000).toISOString().slice(0, 10);
 }
 
-/** Spotpriser pr. time for ét prisområde, kr/kWh uden moms. */
-async function elpriser(omraade, dag) {
+/*
+ * Spotpriser for begge prisområder i ét kald — API'et svarer 429, hvis man
+ * fyrer flere kald af lige efter hinanden. Døgnet skal angives som et
+ * halvåbent interval: end er dagen efter kl. 00:00.
+ */
+async function elpriser(dag) {
   const url =
     "https://api.energidataservice.dk/dataset/Elspotprices" +
-    `?start=${dag}T00:00&end=${dag}T23:59` +
-    `&filter=${encodeURIComponent(JSON.stringify({ PriceArea: [omraade] }))}` +
-    "&sort=HourDK%20ASC&limit=100";
+    `?start=${dag}T00:00&end=${dato(1, dag)}T00:00` +
+    `&filter=${encodeURIComponent(JSON.stringify({ PriceArea: ["DK1", "DK2"] }))}` +
+    "&sort=HourDK%20ASC&limit=200";
 
-  const data = await hent(url, { json: true });
-  const rk = data.records || [];
-  return rk.map((r) => ({
-    time: Number(r.HourDK.slice(11, 13)),
-    pris: +(r.SpotPriceDKK / 1000).toFixed(4), // datasættet er kr/MWh
-  }));
+  let data;
+  for (let forsoeg = 1; ; forsoeg++) {
+    try {
+      data = await hent(url, { json: true });
+      break;
+    } catch (err) {
+      if (forsoeg >= 4) throw err;
+      const vent = forsoeg * 5000;
+      console.log(`   ${err.message} — prøver igen om ${vent / 1000}s`);
+      await new Promise((r) => setTimeout(r, vent));
+    }
+  }
+
+  const ud = { DK1: [], DK2: [] };
+  for (const r of data.records || []) {
+    if (!ud[r.PriceArea]) continue;
+    ud[r.PriceArea].push({
+      time: Number(r.HourDK.slice(11, 13)),
+      pris: +(r.SpotPriceDKK / 1000).toFixed(4), // datasættet er kr/MWh
+    });
+  }
+  return { priser: ud, raa: data };
 }
 
 /* ----------------------------------------------------------- brændstof */
 
-// Kandidater til pumpepriser. Vi ved endnu ikke, hvilke der svarer med
-// noget brugbart — probe-kørslen viser det i loggen.
-const BRAENDSTOF_KILDER = [
-  { navn: "circlek", url: "https://www.circlek.dk/priser" },
-  { navn: "ok", url: "https://www.ok.dk/privat/produkter/benzinkort/prisudvikling" },
-  { navn: "q8", url: "https://www.q8.dk/da-dk/privat/priser" },
-  { navn: "shell", url: "https://www.shell.dk/bilister/shell-braendstof/braendstofpriser.html" },
-  { navn: "goon", url: "https://goon.nu/priser/" },
-];
+const OK_SIDE = "https://www.ok.dk/privat/produkter/benzinkort/prisudvikling";
 
+/*
+ * OK's prisside henter selv tallene bagfra. Første probe viste, at siden
+ * indeholder produktlisten (Blyfri 95 = varenr 536, Diesel = 231), så nu
+ * leder vi efter det endepunkt, den kalder med de varenumre.
+ */
 async function probeBraendstof() {
-  for (const kilde of BRAENDSTOF_KILDER) {
-    console.log(`\n=== ${kilde.navn} — ${kilde.url}`);
-    try {
-      const html = await hent(kilde.url);
-      console.log(`   længde: ${html.length}`);
+  console.log(`\n=== ok.dk — ${OK_SIDE}`);
+  const html = await hent(OK_SIDE);
+  console.log(`   længde: ${html.length}`);
 
-      // Find alt der ligner en literpris: 8-20 kr med komma eller punktum.
-      const priser = [...html.matchAll(/\b(\d{1,2})[.,](\d{2})\b/g)]
-        .map((m) => Number(`${m[1]}.${m[2]}`))
-        .filter((n) => n >= 7 && n <= 22);
-      console.log(`   pris-lignende tal: ${[...new Set(priser)].slice(0, 30).join(", ")}`);
+  // Hele settings-objektet, som produktlisten lå i
+  const s = html.match(/var settings = (\{.*?\});<\/script>/s);
+  console.log("   settings: " + (s ? s[1].slice(0, 2000) : "ikke fundet"));
 
-      // Vis konteksten omkring ord vi forventer at finde prisen nær
-      for (const ord of ["Blyfri", "Oktan 95", "95", "Diesel", "diesel"]) {
-        const i = html.indexOf(ord);
-        if (i > -1) {
-          console.log(
-            `   "${ord}" @ ${i}: ` +
-              JSON.stringify(html.slice(Math.max(0, i - 120), i + 220).replace(/\s+/g, " "))
-          );
-        }
-      }
-    } catch (err) {
-      console.log(`   FEJL: ${err.message}`);
-    }
+  // Alt der ligner et endepunkt
+  const urls = new Set();
+  for (const m of html.matchAll(/["'](\/[A-Za-z0-9_\-/.]*(?:api|pris|price|graph|chart|data)[A-Za-z0-9_\-/.]*)["']/gi)) {
+    urls.add(m[1]);
+  }
+  console.log("   mulige endepunkter:\n     " + [...urls].slice(0, 40).join("\n     "));
+
+  // Felter der ligner en url i konfigurationen
+  for (const m of html.matchAll(/\\?"(\w*(?:[Uu]rl|[Ee]ndpoint|[Aa]ction))\\?":\\?"([^"\\]{4,120})/g)) {
+    console.log(`   ${m[1]} = ${m[2]}`);
   }
 }
 
@@ -102,13 +112,13 @@ async function probeBraendstof() {
 async function main() {
   if (PROBE) {
     console.log("### ELPRISER");
-    for (const omraade of ["DK1", "DK2"]) {
-      try {
-        const p = await elpriser(omraade, dato());
-        console.log(`${omraade} i dag: ${p.length} timer, fx ${JSON.stringify(p.slice(0, 3))}`);
-      } catch (err) {
-        console.log(`${omraade}: FEJL ${err.message}`);
-      }
+    try {
+      const { priser, raa } = await elpriser(dato());
+      console.log(`   total records: ${(raa.records || []).length}`);
+      console.log(`   første record: ${JSON.stringify((raa.records || [])[0])}`);
+      console.log(`   DK1: ${priser.DK1.length} timer, DK2: ${priser.DK2.length} timer`);
+    } catch (err) {
+      console.log(`   FEJL ${err.message}`);
     }
     console.log("\n### BRÆNDSTOF");
     await probeBraendstof();
@@ -121,10 +131,11 @@ async function main() {
     braendstof: null,
   };
 
-  for (const omraade of ["DK1", "DK2"]) {
-    ud.el[omraade] = await elpriser(omraade, dato());
-    console.log(`${omraade}: ${ud.el[omraade].length} timepriser`);
-  }
+  const { priser } = await elpriser(ud.el.dato);
+  ud.el.DK1 = priser.DK1;
+  ud.el.DK2 = priser.DK2;
+  console.log(`el: DK1 ${priser.DK1.length} timer, DK2 ${priser.DK2.length} timer`);
+  if (!priser.DK1.length) throw new Error("ingen elpriser for " + ud.el.dato);
 
   await mkdir(dirname(UD), { recursive: true });
   await writeFile(UD, JSON.stringify(ud, null, 2) + "\n");
