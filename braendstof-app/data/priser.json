@@ -1,5 +1,5 @@
 {
-  "opdateret": "2026-09-11T12:31:55.567Z",
+  "opdateret": "2026-09-11T12:39:46.784Z",
   "el": {
     "dato": "2026-09-11",
     "DK1": [
@@ -204,6 +204,6 @@
     "diesel": 16.59,
     "kilde": "ok.dk",
     "kildeUrl": "https://www.ok.dk/privat/produkter/ok-kort/benzinpriser",
-    "hentet": "2026-09-11T12:31:57.553Z"
+    "hentet": "2026-09-11T12:39:47.966Z"
   }
 }
