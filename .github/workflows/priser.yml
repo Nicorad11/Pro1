@@ -45,12 +45,14 @@ jobs:
       - name: Gem opdaterede priser
         if: ${{ !inputs.probe }}
         run: |
-          if git diff --quiet -- braendstof-app/data; then
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # git add først: en helt ny datafil er ikke sporet endnu, og så
+          # ser git diff den ikke.
+          git add braendstof-app/data
+          if git diff --cached --quiet -- braendstof-app/data; then
             echo "ingen ændring i priserne"
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add braendstof-app/data
           git commit -m "Opdater priser $(date -u +%Y-%m-%dT%H:%MZ)"
           git push
