@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="da">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>El eller benzin? — prisberegner</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+
+  <body>
+    <header class="topbar">
+      <h1>El eller benzin?</h1>
+      <p class="tagline">Hvad koster det dig pr. kilometer — med dagens priser.</p>
+    </header>
+
+    <main>
+      <!-- ---------------------------------------------------------- Resultat -->
+      <section class="verdict" id="verdict" aria-live="polite">
+        <div class="verdict-headline" id="verdictHeadline">Beregner …</div>
+        <div class="verdict-sub" id="verdictSub"></div>
+
+        <div class="cards">
+          <div class="card card-el">
+            <div class="card-title">El</div>
+            <div class="card-price"><span id="elPerKm">–</span><span class="unit">kr/km</span></div>
+            <dl class="card-facts">
+              <dt>100 km koster</dt><dd id="elPer100km">–</dd>
+              <dt>For 100 kr kører du</dt><dd id="elKmPer100kr">–</dd>
+              <dt>Pris pr. kWh (alt inkl.)</dt><dd id="elPrisKwhUd">–</dd>
+            </dl>
+          </div>
+
+          <div class="card card-benzin">
+            <div class="card-title" id="benzinCardTitle">Benzin</div>
+            <div class="card-price"><span id="benzinPerKm">–</span><span class="unit">kr/km</span></div>
+            <dl class="card-facts">
+              <dt>100 km koster</dt><dd id="benzinPer100km">–</dd>
+              <dt>For 100 kr kører du</dt><dd id="benzinKmPer100kr">–</dd>
+              <dt>Pris pr. liter</dt><dd id="benzinPrisLiterUd">–</dd>
+            </dl>
+          </div>
+        </div>
+
+        <div class="yearbox">
+          <label for="kmPerAar">Jeg kører ca.</label>
+          <input type="number" id="kmPerAar" min="0" step="500" value="15000" />
+          <span>km om året →</span>
+          <strong id="aarsBesparelse">–</strong>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------------------- Elpris -->
+      <section class="panel">
+        <h2>Elpris</h2>
+
+        <div class="row">
+          <label>Hvor lader du?</label>
+          <div class="segmented" id="ladeSted" role="radiogroup">
+            <button type="button" data-value="hjemme" class="active" role="radio" aria-checked="true">Hjemme (spotpris)</button>
+            <button type="button" data-value="fast" role="radio" aria-checked="false">Fast aftale</button>
+            <button type="button" data-value="lader" role="radio" aria-checked="false">Offentlig lader</button>
+          </div>
+        </div>
+
+        <div class="subpanel" id="spotPanel">
+          <div class="row">
+            <label for="region">Prisområde</label>
+            <select id="region">
+              <option value="DK1">DK1 — Vest for Storebælt</option>
+              <option value="DK2">DK2 — Øst for Storebælt</option>
+            </select>
+            <button type="button" id="opdaterPriser" class="ghost">Hent priser igen</button>
+          </div>
+
+          <div class="row">
+            <label for="spotValg">Spotpris</label>
+            <select id="spotValg">
+              <option value="now">Lige nu</option>
+              <option value="avg">Døgnets gennemsnit</option>
+              <option value="cheapest3">3 billigste timer (natladning)</option>
+            </select>
+            <span class="readout" id="spotReadout">henter …</span>
+          </div>
+
+          <div class="row">
+            <label for="tillaeg">Tillæg pr. kWh <span class="hint">(elafgift, nettarif, abonnement, elselskabets tillæg — før moms)</span></label>
+            <input type="number" id="tillaeg" min="0" step="0.05" value="1.40" />
+            <span class="suffix">kr/kWh</span>
+          </div>
+
+          <div class="row">
+            <label for="moms">Moms</label>
+            <input type="checkbox" id="moms" checked />
+            <span class="hint">Læg 25 % oveni (priserne fra API'et er uden moms)</span>
+          </div>
+
+          <div class="chart-wrap">
+            <div class="chart-head">
+              <span id="chartTitle">Prisen time for time i dag</span>
+              <span class="legend"><i class="sw-now"></i> nu <i class="sw-cheap"></i> billigst</span>
+            </div>
+            <div class="chart" id="chart"></div>
+            <div class="chart-note" id="chartNote"></div>
+          </div>
+        </div>
+
+        <div class="subpanel hidden" id="fastPanel">
+          <div class="row">
+            <label for="fastPris">Din faste elpris (alt inkl.)</label>
+            <input type="number" id="fastPris" min="0" step="0.10" value="2.50" />
+            <span class="suffix">kr/kWh</span>
+          </div>
+        </div>
+
+        <div class="subpanel hidden" id="laderPanel">
+          <div class="row">
+            <label for="laderPris">Pris ved offentlig lader</label>
+            <input type="number" id="laderPris" min="0" step="0.25" value="4.50" />
+            <span class="suffix">kr/kWh</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------------- Benzinpris -->
+      <section class="panel">
+        <h2>Benzin / diesel</h2>
+
+        <div class="row">
+          <label>Brændstof</label>
+          <div class="segmented" id="braendstof" role="radiogroup">
+            <button type="button" data-value="benzin" class="active" role="radio" aria-checked="true">Benzin 95</button>
+            <button type="button" data-value="diesel" role="radio" aria-checked="false">Diesel</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <label for="benzinPris">Pris pr. liter</label>
+          <input type="number" id="benzinPris" min="0" step="0.10" value="13.79" />
+          <span class="suffix">kr/l</span>
+        </div>
+
+        <p class="note">
+          Der findes ingen gratis, åben API med danske pumpepriser, så den her taster du selv ind —
+          den bliver husket i browseren. Tjek dagsprisen hos
+          <a href="https://www.fdm.dk/benzinpriser" target="_blank" rel="noopener">FDM</a>,
+          <a href="https://www.circlek.dk/priser" target="_blank" rel="noopener">Circle K</a> eller
+          <a href="https://www.ok.dk/privat/produkter/benzinkort/prisudvikling" target="_blank" rel="noopener">OK</a>.
+          <span id="prisAlder"></span>
+        </p>
+      </section>
+
+      <!-- -------------------------------------------------------------- Biler -->
+      <section class="panel">
+        <h2>Bilerne</h2>
+
+        <div class="row">
+          <label for="elForbrug">Elbilens forbrug</label>
+          <input type="number" id="elForbrug" min="1" step="0.5" value="17" />
+          <span class="suffix">kWh/100 km</span>
+          <span class="hint">Typisk 15–22 om sommeren, 20–28 om vinteren</span>
+        </div>
+
+        <div class="row">
+          <label for="ladetab">Ladetab</label>
+          <input type="number" id="ladetab" min="0" max="40" step="1" value="10" />
+          <span class="suffix">%</span>
+          <span class="hint">Strøm der går tabt i laderen og bilen — du betaler for den</span>
+        </div>
+
+        <div class="row">
+          <label for="benzinForbrug">Benzinbilens forbrug</label>
+          <input type="number" id="benzinForbrug" min="0.1" step="0.5" value="18" />
+          <select id="forbrugsEnhed">
+            <option value="kmpl">km/l</option>
+            <option value="l100">l/100 km</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- ----------------------------------------------------------- Vendepunkt -->
+      <section class="panel breakeven">
+        <h2>Vendepunktet</h2>
+        <p>
+          Med dine tal er de to lige dyre, hvis benzinen koster
+          <strong id="beBenzin">–</strong>, eller hvis strømmen koster
+          <strong id="beEl">–</strong>.
+        </p>
+      </section>
+
+      <footer class="footer">
+        <p>
+          Spotpriser hentes fra <a href="https://www.elprisenligenu.dk/elpris-api" target="_blank" rel="noopener">elprisenligenu.dk</a>
+          med <a href="https://www.energidataservice.dk/" target="_blank" rel="noopener">Energi Data Service</a> som reserve.
+          Alle indtastninger gemmes kun i din egen browser.
+        </p>
+      </footer>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
