@@ -1,5 +1,5 @@
 {
-  "opdateret": "2026-09-11T12:39:46.784Z",
+  "opdateret": "2026-09-11T12:50:02.997Z",
   "el": {
     "dato": "2026-09-11",
     "DK1": [
@@ -199,11 +199,5 @@
       }
     ]
   },
-  "braendstof": {
-    "benzin95": 14.89,
-    "diesel": 16.59,
-    "kilde": "ok.dk",
-    "kildeUrl": "https://www.ok.dk/privat/produkter/ok-kort/benzinpriser",
-    "hentet": "2026-09-11T12:39:47.966Z"
-  }
+  "braendstof": null
 }
