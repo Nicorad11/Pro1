@@ -1,0 +1,58 @@
+name: Hent priser
+
+on:
+  schedule:
+    # Kl. 14:10 UTC rammer efter Nord Pool har offentliggjort morgendagens
+    # spotpriser, og kl. 05:10 UTC giver friske tal til morgenturen.
+    - cron: "10 5,14 * * *"
+  workflow_dispatch:
+    inputs:
+      probe:
+        description: "Kør kun undersøgelse af priskilderne"
+        type: boolean
+        default: false
+  push:
+    branches: [claude/fuel-price-calculator-app-8t6hvw]
+    paths:
+      - "braendstof-app/tools/**"
+      - ".github/workflows/priser.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: priser
+  cancel-in-progress: false
+
+jobs:
+  priser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Undersøg priskilderne
+        if: ${{ inputs.probe }}
+        run: node braendstof-app/tools/hent-priser.mjs --probe
+
+      - name: Hent priser
+        if: ${{ !inputs.probe }}
+        run: node braendstof-app/tools/hent-priser.mjs
+
+      - name: Gem opdaterede priser
+        if: ${{ !inputs.probe }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # git add først: en helt ny datafil er ikke sporet endnu, og så
+          # ser git diff den ikke.
+          git add braendstof-app/data
+          if git diff --cached --quiet -- braendstof-app/data; then
+            echo "ingen ændring i priserne"
+            exit 0
+          fi
+          git commit -m "Opdater priser $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push
