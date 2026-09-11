@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>El eller benzin? — prisberegner</title>
+    <title>El eller benzin?</title>
     <link rel="stylesheet" href="style.css" />
   </head>
 
@@ -16,6 +16,7 @@
     <main>
       <!-- ---------------------------------------------------------- Resultat -->
       <section class="verdict" id="verdict" aria-live="polite">
+        <div class="banner hidden" id="banner"></div>
         <div class="verdict-headline" id="verdictHeadline">Beregner …</div>
         <div class="verdict-sub" id="verdictSub"></div>
 
@@ -44,7 +45,7 @@
         <div class="yearbox">
           <label for="kmPerAar">Jeg kører ca.</label>
           <input type="number" id="kmPerAar" min="0" step="500" value="15000" />
-          <span>km om året →</span>
+          <span>km om året</span>
           <strong id="aarsBesparelse">–</strong>
         </div>
       </section>

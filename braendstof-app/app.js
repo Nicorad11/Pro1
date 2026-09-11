@@ -15,6 +15,7 @@ const MOMS = 1.25;
 
 const defaults = {
   ladeSted: "hjemme",
+  harValgtLadeSted: false,
   region: "DK1",
   spotValg: "now",
   tillaeg: 1.4,
@@ -137,6 +138,14 @@ async function hentSpotpriser() {
     }
   }
 
+  // Uden spotpriser kan appen ikke regne på el. Har brugeren ikke selv valgt,
+  // hvor der lades, så stil om til en fast pris — så virker beregneren
+  // stadig, i stedet for at stå med to tomme felter.
+  if (spot.fejl && !state.harValgtLadeSted && state.ladeSted === "hjemme") {
+    state.ladeSted = "fast";
+    visLadePanel();
+  }
+
   spot.henter = false;
   opdater();
 }
@@ -240,11 +249,26 @@ function opdater() {
   el("beBenzin").textContent = r.beBenzinPrLiter === null ? "–" : kr(r.beBenzinPrLiter, 2) + "/l";
   el("beEl").textContent = r.beElPrKwh === null ? "–" : kr(r.beElPrKwh, 2) + "/kWh";
 
+  visBanner();
   visDom(r, braendstofNavn);
   visAarsTal(r);
   visSpot();
   tegnGraf();
   visPrisAlder();
+}
+
+/* Sig det tydeligt, hvis tallene ikke bygger på dagens spotpriser. */
+function visBanner() {
+  const b = el("banner");
+  if (!spot.fejl) {
+    b.className = "banner hidden";
+    return;
+  }
+  b.className = "banner";
+  b.textContent =
+    state.ladeSted === "hjemme"
+      ? "Dagens elpriser kunne ikke hentes. Vælg „Fast aftale“ og tast din egen pris."
+      : "Dagens elpriser kunne ikke hentes — beregningen bruger prisen, du selv har tastet ind.";
 }
 
 function visDom(r, braendstofNavn) {
@@ -254,9 +278,22 @@ function visDom(r, braendstofNavn) {
   kortBenzin.classList.remove("winner");
 
   if (r.elKm === null || r.benzinKm === null) {
-    el("verdictHeadline").textContent = spot.henter ? "Henter elpriser …" : "Udfyld tallene";
-    el("verdictSub").textContent = spot.fejl || "";
-    el("verdictSub").className = "verdict-sub" + (spot.fejl ? " error" : "");
+    const sub = el("verdictSub");
+    if (spot.henter) {
+      el("verdictHeadline").textContent = "Henter elpriser …";
+      sub.textContent = "";
+      sub.className = "verdict-sub";
+    } else if (spot.fejl) {
+      el("verdictHeadline").textContent = "Kan ikke hente elprisen";
+      sub.textContent =
+        spot.fejl + " Vælg „Fast aftale“ herunder og tast din egen pris, " +
+        "så regner appen videre.";
+      sub.className = "verdict-sub error";
+    } else {
+      el("verdictHeadline").textContent = "Udfyld tallene";
+      sub.textContent = "";
+      sub.className = "verdict-sub";
+    }
     return;
   }
 
@@ -397,8 +434,8 @@ function bindSegment(id, navn, efter) {
         k.classList.toggle("active", aktiv);
         k.setAttribute("aria-checked", String(aktiv));
       });
-      save();
       if (efter) efter();
+      save();
       opdater();
     });
   });
@@ -413,7 +450,10 @@ function visLadePanel() {
 /* ------------------------------------------------------------------ opstart */
 
 bindFelter();
-bindSegment("ladeSted", "ladeSted", visLadePanel);
+bindSegment("ladeSted", "ladeSted", () => {
+  state.harValgtLadeSted = true; // så skifter appen ikke om under fødderne på dig
+  visLadePanel();
+});
 bindSegment("braendstof", "braendstof");
 visLadePanel();
 el("opdaterPriser").addEventListener("click", hentSpotpriser);

@@ -69,6 +69,16 @@ main {
   margin-bottom: 20px;
 }
 
+.banner {
+  background: var(--benzin-soft);
+  border: 1px solid color-mix(in srgb, var(--benzin) 35%, transparent);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
 .verdict-headline {
   font-size: clamp(20px, 4.5vw, 26px);
   font-weight: 650;
@@ -160,6 +170,9 @@ main {
 }
 
 .yearbox input { width: 100px; }
+
+/* Resultatet får altid sin egen linje — ellers hænger det i en halv sætning */
+.yearbox strong { flex-basis: 100%; }
 
 /* ----------------------------------------------------------------- panels */
 .panel {
@@ -342,6 +355,29 @@ button.ghost:hover { background: var(--bg); }
   margin-top: 24px;
   font-size: 13px;
   color: var(--muted);
+}
+
+/* På telefonen: etiket på egen linje, felt og enhed side om side under den */
+@media (max-width: 560px) {
+  .panel { padding: 18px 16px 22px; }
+  .verdict { padding: 20px 16px; }
+
+  .row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px 10px;
+  }
+
+  .row > label,
+  .row > .hint,
+  .row > .segmented,
+  .row > .readout { grid-column: 1 / -1; }
+
+  .row input[type="number"],
+  .row select { width: 100%; }
+
+  .row input[type="checkbox"] { justify-self: start; }
 }
 
 /* ------------------------------------------------------------------- misc */
