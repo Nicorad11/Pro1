@@ -78,6 +78,35 @@ async function elpriser(dag) {
 
 /* ----------------------------------------------------------- brændstof */
 
+/*
+ * Energi Data Service svarede 200 med nul records på et ellers gyldigt
+ * døgn. Vi skal se, hvad datasættet overhovedet indeholder, og om
+ * elprisenligenu.dk er en nemmere vej.
+ */
+async function probeEl() {
+  console.log("### ELPRISER");
+
+  const forsoeg = [
+    ["nyeste records uden filter",
+      "https://api.energidataservice.dk/dataset/Elspotprices?limit=3&sort=HourDK%20DESC"],
+    ["i dag, kun dato-filter",
+      `https://api.energidataservice.dk/dataset/Elspotprices?limit=3&start=${dato()}&end=${dato(1)}`],
+    ["elprisenligenu",
+      `https://www.elprisenligenu.dk/api/v1/prices/${dato().slice(0, 4)}/${dato().slice(5, 7)}-${dato().slice(8, 10)}_DK1.json`],
+  ];
+
+  for (const [navn, url] of forsoeg) {
+    try {
+      const data = await hent(url, { json: true });
+      const kort = JSON.stringify(data);
+      console.log(`   ${navn}: ${kort.slice(0, 700)}`);
+    } catch (err) {
+      console.log(`   ${navn}: FEJL ${err.message}`);
+    }
+    await new Promise((r) => setTimeout(r, 1500)); // API'et svarer 429 ved hurtige kald
+  }
+}
+
 const OK_SIDE = "https://www.ok.dk/privat/produkter/benzinkort/prisudvikling";
 
 /*
@@ -85,25 +114,41 @@ const OK_SIDE = "https://www.ok.dk/privat/produkter/benzinkort/prisudvikling";
  * indeholder produktlisten (Blyfri 95 = varenr 536, Diesel = 231), så nu
  * leder vi efter det endepunkt, den kalder med de varenumre.
  */
+/*
+ * Prisudviklingssiden henter tallene med JavaScript, så endepunktet står
+ * ikke i HTML'en. OK har til gengæld sider, der viser dagens pris direkte
+ * — dem kigger vi efter her.
+ */
 async function probeBraendstof() {
-  console.log(`\n=== ok.dk — ${OK_SIDE}`);
-  const html = await hent(OK_SIDE);
-  console.log(`   længde: ${html.length}`);
+  const sider = [
+    "https://www.ok.dk/privat/hjaelp/bilen/benzinpriser",
+    "https://www.ok.dk/privat/produkter/ok-kort/benzinpriser",
+    OK_SIDE,
+  ];
 
-  // Hele settings-objektet, som produktlisten lå i
-  const s = html.match(/var settings = (\{.*?\});<\/script>/s);
-  console.log("   settings: " + (s ? s[1].slice(0, 2000) : "ikke fundet"));
+  for (const url of sider) {
+    console.log(`\n=== ${url}`);
+    try {
+      const html = await hent(url);
+      const tekst = html.replace(/<script[\s\S]*?<\/script>/g, " ").replace(/<[^>]+>/g, " ");
 
-  // Alt der ligner et endepunkt
-  const urls = new Set();
-  for (const m of html.matchAll(/["'](\/[A-Za-z0-9_\-/.]*(?:api|pris|price|graph|chart|data)[A-Za-z0-9_\-/.]*)["']/gi)) {
-    urls.add(m[1]);
-  }
-  console.log("   mulige endepunkter:\n     " + [...urls].slice(0, 40).join("\n     "));
+      // Kontekst omkring hvert pris-lignende tal i den synlige tekst
+      const fundet = [];
+      for (const m of tekst.matchAll(/\b(\d{1,2}[.,]\d{2})\b/g)) {
+        const n = Number(m[1].replace(",", "."));
+        if (n < 7 || n > 22) continue;
+        fundet.push(tekst.slice(Math.max(0, m.index - 90), m.index + 40).replace(/\s+/g, " "));
+      }
+      console.log(`   ${fundet.length} pris-lignende tal i teksten`);
+      fundet.slice(0, 12).forEach((f) => console.log(`     … ${f}`));
 
-  // Felter der ligner en url i konfigurationen
-  for (const m of html.matchAll(/\\?"(\w*(?:[Uu]rl|[Ee]ndpoint|[Aa]ction))\\?":\\?"([^"\\]{4,120})/g)) {
-    console.log(`   ${m[1]} = ${m[2]}`);
+      // Og i scripts: JSON der nævner en pris sammen med et varenummer
+      for (const m of html.matchAll(/\{[^{}]{0,200}(?:"pris"|"price"|varenr)[^{}]{0,200}\}/gi)) {
+        console.log(`   json: ${m[0].slice(0, 200)}`);
+      }
+    } catch (err) {
+      console.log(`   FEJL: ${err.message}`);
+    }
   }
 }
 
@@ -111,15 +156,7 @@ async function probeBraendstof() {
 
 async function main() {
   if (PROBE) {
-    console.log("### ELPRISER");
-    try {
-      const { priser, raa } = await elpriser(dato());
-      console.log(`   total records: ${(raa.records || []).length}`);
-      console.log(`   første record: ${JSON.stringify((raa.records || [])[0])}`);
-      console.log(`   DK1: ${priser.DK1.length} timer, DK2: ${priser.DK2.length} timer`);
-    } catch (err) {
-      console.log(`   FEJL ${err.message}`);
-    }
+    await probeEl();
     console.log("\n### BRÆNDSTOF");
     await probeBraendstof();
     return;
