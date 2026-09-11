@@ -95,7 +95,12 @@ async function braendstofpriser() {
 
   // Vis konteksten, så det er til at se i loggen, hvis siden skifter form
   const i = tekst.search(/Benzinpris/i);
-  if (i > -1) console.log(`   kontekst: …${tekst.slice(Math.max(0, i - 120), i + 160)}…`);
+  if (i > -1) console.log(`   kontekst: …${tekst.slice(Math.max(0, i - 700), i + 500)}…`);
+
+  // Står der en dato på siden, er tallene til at datere
+  for (const m of tekst.matchAll(/(opdateret|pr\.|gældende|dags dato|senest)[^.]{0,80}/gi)) {
+    console.log(`   dato?: ${m[0]}`);
+  }
 
   if (benzin95 === null && diesel === null) throw new Error("fandt ingen priser på siden");
 
