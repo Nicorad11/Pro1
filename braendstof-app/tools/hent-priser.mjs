@@ -63,7 +63,19 @@ async function elpriser(omraade, dag) {
 
 /* ----------------------------------------------------------- brændstof */
 
-const OK_PRISSIDE = "https://www.ok.dk/privat/produkter/ok-kort/benzinpriser";
+/*
+ * Selskaber der udgiver deres dagspris. OK's benzinprisside blev forsøgt
+ * først, men tallene dér viste sig at være faste eksempelværdier i en
+ * sammenligningsberegner ("Beregneren tager ikke højde for…"), ikke
+ * dagens pris — derfor kom diesel hjem dyrere end benzin.
+ */
+const PRISKILDER = [
+  { navn: "ingo", url: "https://www.ingo.dk/braendstofpriser" },
+  { navn: "circlek-api", url: "https://www.circlek.dk/api/prices", json: true },
+  { navn: "f24", url: "https://www.f24.dk/priser/" },
+  { navn: "shell", url: "https://www.shell.dk/bilister/braendstofpriser.html" },
+  { navn: "ok-liste", url: "https://www.ok.dk/privat/produkter/benzinkort/listepriser" },
+];
 
 /** Synlig tekst uden scripts og tags — nemmere at finde priser i. */
 function brødtekst(html) {
@@ -81,36 +93,32 @@ function brødtekst(html) {
  * Ingen af selskaberne har et åbent API, så det er den vej der er.
  */
 async function braendstofpriser() {
-  const tekst = brødtekst(await hent(OK_PRISSIDE));
+  for (const kilde of PRISKILDER) {
+    console.log(`\n   --- ${kilde.navn}: ${kilde.url}`);
+    try {
+      const svar = await hent(kilde.url, { json: kilde.json });
+      if (kilde.json) {
+        console.log(`   json: ${JSON.stringify(svar).slice(0, 800)}`);
+        continue;
+      }
 
-  const find = (ord) => {
-    const m = tekst.match(new RegExp(ord + "\\s*(\\d{1,2}),(\\d{2})\\s*kr", "i"));
-    return m ? Number(`${m[1]}.${m[2]}`) : null;
-  };
+      const tekst = brødtekst(svar);
+      console.log(`   tekstlængde: ${tekst.length}`);
 
-  const benzin95 = find("Benzinpris");
-  const diesel = find("Dieselpris");
-
-  console.log(`   ok.dk: benzin ${benzin95}, diesel ${diesel}`);
-
-  // Vis konteksten, så det er til at se i loggen, hvis siden skifter form
-  const i = tekst.search(/Benzinpris/i);
-  if (i > -1) console.log(`   kontekst: …${tekst.slice(Math.max(0, i - 700), i + 500)}…`);
-
-  // Står der en dato på siden, er tallene til at datere
-  for (const m of tekst.matchAll(/(opdateret|pr\.|gældende|dags dato|senest)[^.]{0,80}/gi)) {
-    console.log(`   dato?: ${m[0]}`);
+      let fundet = 0;
+      for (const m of tekst.matchAll(/\b(\d{1,2}),(\d{2})\b/g)) {
+        const n = Number(`${m[1]}.${m[2]}`);
+        if (n < 8 || n > 20 || fundet >= 10) continue;
+        fundet++;
+        console.log(`   ${n}: …${tekst.slice(Math.max(0, m.index - 110), m.index + 60)}…`);
+      }
+      if (!fundet) console.log("   ingen pris-lignende tal i teksten");
+    } catch (err) {
+      console.log(`   FEJL: ${err.message}`);
+    }
   }
 
-  if (benzin95 === null && diesel === null) throw new Error("fandt ingen priser på siden");
-
-  return {
-    benzin95,
-    diesel,
-    kilde: "ok.dk",
-    kildeUrl: OK_PRISSIDE,
-    hentet: new Date().toISOString(),
-  };
+  throw new Error("ingen bekræftet kilde til pumpepriser endnu");
 }
 
 /* ------------------------------------------------------------------ kør */
@@ -129,7 +137,7 @@ async function main() {
   const ud = {
     opdateret: new Date().toISOString(),
     el: { dato: dato(), DK1: null, DK2: null },
-    braendstof: gammel ? gammel.braendstof : null,
+    braendstof: null,
   };
 
   for (const omraade of ["DK1", "DK2"]) {
@@ -143,7 +151,12 @@ async function main() {
   try {
     ud.braendstof = await braendstofpriser();
   } catch (err) {
-    console.log(`brændstof: FEJL ${err.message} — beholder forrige`);
+    // Behold gårsdagens pris, men kun hvis den kom fra en kilde vi
+    // stadig bruger — så ryger tal fra en forkastet kilde af sig selv.
+    const g = gammel && gammel.braendstof;
+    const stadigGyldig = g && PRISKILDER.some((k) => k.navn === g.kilde);
+    ud.braendstof = stadigGyldig ? g : null;
+    console.log(`brændstof: ${err.message}${stadigGyldig ? " — beholder forrige" : ""}`);
   }
 
   if (PROBE) {
