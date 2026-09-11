@@ -2,10 +2,10 @@
  * El eller benzin? — beregner prisen pr. kilometer for en elbil og en
  * benzinbil, med dagens spotpriser på el.
  *
- * Spotpriser hentes fra elprisenligenu.dk (gratis, ingen nøgle, CORS-åbent).
- * Hvis det kald fejler, prøver vi Energi Data Service i stedet.
- * Benzinprisen taster brugeren selv ind — der findes ingen tilsvarende
- * åben API med danske pumpepriser.
+ * Priserne kommer fra data/priser.json, som en GitHub Action opdaterer to
+ * gange i døgnet: spotpriser fra elprisenligenu.dk og pumpepriser fra
+ * ok.dk. Findes filen ikke, hentes spotpriserne direkte fra
+ * elprisenligenu.dk, og brændstofprisen taster man selv ind.
  */
 
 const STORAGE_KEY = "braendstof-app.v1";
@@ -127,30 +127,6 @@ async function hentElprisenLigeNu(region) {
   }));
 }
 
-async function hentEnergiDataService(region) {
-  const nu = new Date();
-  const { aar, md, dag } = datoDele(nu);
-  const iMorgen = datoDele(new Date(nu.getTime() + 86400000));
-  const url =
-    "https://api.energidataservice.dk/dataset/Elspotprices" +
-    `?start=${aar}-${md}-${dag}T00:00` +
-    `&end=${iMorgen.aar}-${iMorgen.md}-${iMorgen.dag}T00:00` +
-    `&filter=${encodeURIComponent(JSON.stringify({ PriceArea: [region] }))}` +
-    "&sort=HourDK%20ASC";
-
-  const svar = await fetch(url);
-  if (!svar.ok) throw new Error("energidataservice svarede " + svar.status);
-
-  const data = await svar.json();
-  const rk = (data && data.records) || [];
-  if (rk.length === 0) throw new Error("tomt svar");
-
-  return rk.map((r) => ({
-    hour: new Date(r.HourDK).getHours(),
-    dkkExMoms: r.SpotPriceDKK / 1000, // datasættet er i kr/MWh
-  }));
-}
-
 async function hentSpotpriser() {
   spot.henter = true;
   spot.fejl = null;
@@ -167,16 +143,14 @@ async function hentSpotpriser() {
       const timer = data.el && data.el[region];
       if (!timer || !timer.length) throw new Error("ingen elpriser i datafilen");
       if (data.el.dato !== iDag) throw new Error("datafilen er fra " + data.el.dato);
-      spot.kilde = "Energi Data Service";
+      spot.kilde = "elprisenligenu.dk";
       return timer.map((t) => ({ hour: t.time, dkkExMoms: t.pris }));
     },
+    // Direkte fra kilden, hvis datafilen ikke er der (åbner man index.html
+    // som en løs fil, er der ingen datafil at hente).
     async () => {
       spot.kilde = "elprisenligenu.dk";
       return hentElprisenLigeNu(region);
-    },
-    async () => {
-      spot.kilde = "Energi Data Service";
-      return hentEnergiDataService(region);
     },
   ];
 
@@ -440,14 +414,24 @@ function tegnGraf() {
 
 function visPrisAlder() {
   const ud = el("prisAlder");
-  if (!state.benzinPrisOpdateret) {
-    ud.textContent = "";
+  const dage = state.benzinPrisOpdateret
+    ? Math.floor((Date.now() - state.benzinPrisOpdateret) / 86400000)
+    : null;
+
+  const alder =
+    dage === null ? "" : dage < 1 ? "opdateret i dag" : dage === 1 ? "fra i går" : `${dage} dage gammel`;
+
+  if (state.benzinPrisEgen) {
+    ud.textContent = `Din egen pris${alder ? ", " + alder : ""}. Slet feltet og hent siden igen for at få den automatiske pris tilbage.`;
     return;
   }
-  const dage = Math.floor((Date.now() - state.benzinPrisOpdateret) / 86400000);
-  if (dage < 1) ud.textContent = "Din pris er opdateret i dag.";
-  else if (dage === 1) ud.textContent = "Din pris er fra i går.";
-  else ud.textContent = `Din pris er ${dage} dage gammel — tjek den lige.`;
+
+  if (braendstofKilde) {
+    ud.textContent = `Listepris fra ${braendstofKilde.kilde}, ${alder}. Din lokale tank kan afvige — ret bare tallet.`;
+    return;
+  }
+
+  ud.textContent = "Ingen hentet pumpepris — tast din egen ind. Den bliver husket i browseren.";
 }
 
 /* --------------------------------------------------------------- hændelser */

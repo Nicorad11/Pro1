@@ -35,8 +35,7 @@ jobs:
           node-version: "22"
 
       - name: Undersøg priskilderne
-        if: ${{ github.event_name == 'push' || inputs.probe }}
-        continue-on-error: true
+        if: ${{ inputs.probe }}
         run: node braendstof-app/tools/hent-priser.mjs --probe
 
       - name: Hent priser
